@@ -1,0 +1,10 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+const read=p=>readFile(new URL('../'+p,import.meta.url),'utf8');
+let js=(await Promise.all(['src/model.mjs','src/views.mjs','src/presentation.mjs','src/interface.mjs'].map(read))).join('\n').replace(/^import .*?;\s*$/gm,'').replace(/^export /gm,'');
+let css=await read('app/styles.css');
+let font=await readFile(new URL('../public/assets/Inter.woff2',import.meta.url));
+css=css.replace('/assets/Inter.woff2','data:font/woff2;base64,'+font.toString('base64'));
+const imgs=await Promise.all(Array.from({length:5},async(_,i)=>'data:image/webp;base64,'+(await readFile(new URL('../public/assets/cable'+i+'.webp',import.meta.url))).toString('base64')));
+js=js.replaceAll('/assets/cable0.webp',imgs[0]).replaceAll('/assets/cable${i+1}.webp','${offlineImages[i+1]}');
+await mkdir('offline',{recursive:true});
+await writeFile('offline/ONEFLOW.html','<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ONEFLOW · Competition demo</title><style>'+css+'</style><div id="root"></div><script type="module">const offlineImages='+JSON.stringify(imgs)+';\n'+js+'\nmount(document.querySelector("#root"));</script></html>');

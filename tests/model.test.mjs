@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {seed,change,day} from '../src/model.mjs';
+const id=1042;
+const allocated=()=>change(seed(),'allocate',{id});
+const active=()=>change(allocated(),'work',{id});
+test('fixed case opening stock and example order',()=>{let s=seed();assert.equal(s.copper,205);assert.equal(s.stock[0],60);assert.equal(s.orders[0].q,100)});
+test('new order progresses through review and confirmation',()=>{let s=change(seed(),'order',{p:2,q:21,date:day(5)}),id=s.orders[0].id;assert.equal(s.orders[0].s,0);s=change(change(s,'review',{id}),'confirm',{id});assert.equal(s.orders[0].s,2)});
+for(let q of [0,-3,0.5,NaN,1000001])test('invalid quantity '+q,()=>assert.throws(()=>change(seed(),'order',{p:0,q,date:day()})));
+test('past dates fail',()=>assert.throws(()=>change(seed(),'order',{p:0,q:2,date:day(-1)})));
+test('allocation consumes 60 exactly once',()=>{let s=allocated();assert.equal(s.stock[0],0);assert.equal(s.orders[0].allocated,60);assert.throws(()=>change(s,'allocate',{id}))});
+test('shortfall creates one work order for 40',()=>{assert.throws(()=>change(seed(),'work',{id}));let s=active();assert.equal(s.orders[0].work,40);assert.throws(()=>change(s,'work',{id}))});
+test('partial logs then full production unlock dispatch',()=>{let s=active();for(let good of [15,25])s=change(s,'log',{id,good,bad:1,minutes:0,reason:'Surface'});assert.equal(s.orders[0].s,4);assert.equal(change(s,'deliver',{id}).orders[0].s,5)});
+test('overproduction, empty logs, unexplained defects fail',()=>{for(let [good,bad] of [[41,0],[0,0],[2,1]])assert.throws(()=>change(active(),'log',{id,good,bad,minutes:0,reason:'None'}))});
+test('stock-only order skips production',()=>{let s=seed();s.orders[0].q=40;s=change(s,'allocate',{id});assert.equal(s.orders[0].s,4);assert.equal(s.stock[0],20)});
+test('PO receipt posts tonnes once',()=>{let s=change(seed(),'po',{i:0});assert.equal(s.copper,245);assert.throws(()=>change(s,'po',{i:0}))});
+test('alerts resolve once',()=>{let s=change(seed(),'resolve',{i:0});assert.deepEqual(s.resolved,[0]);assert.throws(()=>change(s,'resolve',{i:0}))});
+test('source snapshot remains immutable',()=>{let s=seed();change(s,'allocate',{id});assert.equal(s.stock[0],60)});
